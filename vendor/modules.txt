@@ -1,0 +1,18 @@
+# github.com/gorilla/mux v1.8.0
+## explicit
+github.com/gorilla/mux
+# github.com/osohq/go-oso v0.26.0
+## explicit
+github.com/osohq/go-oso
+github.com/osohq/go-oso/errors
+github.com/osohq/go-oso/interfaces
+github.com/osohq/go-oso/internal/ffi
+github.com/osohq/go-oso/internal/ffi/native
+github.com/osohq/go-oso/internal/ffi/native/linux
+github.com/osohq/go-oso/internal/ffi/native/macos
+github.com/osohq/go-oso/internal/ffi/native/macos/amd64
+github.com/osohq/go-oso/internal/ffi/native/macos/arm64
+github.com/osohq/go-oso/internal/ffi/native/windows
+github.com/osohq/go-oso/internal/host
+github.com/osohq/go-oso/internal/util
+github.com/osohq/go-oso/types
