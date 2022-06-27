@@ -93,7 +93,7 @@ func main() {
 
 			user, ok := authz.Users[authenticatedUser]
 			if !ok {
-				user = authz.User{Roles: []authz.Role{}}
+				user = &authz.User{Roles: []authz.Role{}}
 			}
 
 			// decorate user object with groups

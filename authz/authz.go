@@ -13,10 +13,10 @@ import (
 
 var (
 	// Groups is an in-memory collection of groups
-	Groups = map[string]Group{}
+	Groups = map[string]*Group{}
 
 	// Users is an in-memory collection of users
-	Users = map[string]User{}
+	Users = map[string]*User{}
 )
 
 // Load loads the authz data onto memory
@@ -45,9 +45,8 @@ func Load(fname string) error {
 			for _, user := range rule.Users {
 				if u, ok := Users[user]; ok {
 					u.Roles = append(u.Roles, Role{Name: rule.Role, Resource: resource})
-					Users[user] = u
 				} else {
-					Users[user] = User{
+					Users[user] = &User{
 						Roles: []Role{{Name: rule.Role, Resource: resource}},
 					}
 				}
@@ -55,9 +54,8 @@ func Load(fname string) error {
 			for _, group := range rule.Groups {
 				if g, ok := Groups[group]; ok {
 					g.Roles = append(g.Roles, Role{Name: rule.Role, Resource: resource})
-					Groups[group] = g
 				} else {
-					Groups[group] = Group{
+					Groups[group] = &Group{
 						Roles: []Role{{Name: rule.Role, Resource: resource}},
 					}
 				}

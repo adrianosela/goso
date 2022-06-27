@@ -19,7 +19,7 @@ type Group struct {
 // User represents privilege held by a user
 type User struct {
 	Roles  []Role
-	Groups []Group
+	Groups []*Group
 }
 
 // Rule represents the access control rule for a resource
