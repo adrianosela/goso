@@ -8,50 +8,17 @@ import (
 
 	"github.com/gorilla/mux"
 	oso "github.com/osohq/go-oso"
-)
 
-type FeatureFlag struct {
-	ID string
-}
-
-type Role struct {
-	Name          string
-	FeatureFlagID string
-}
-
-type OktaUser struct {
-	Roles  []Role
-	Groups []OktaGroup
-}
-
-type OktaGroup struct {
-	Roles []Role
-}
-
-var (
-	ffDb = map[string]FeatureFlag{
-		"x": {ID: "x"},
-		"y": {ID: "y"},
-		"z": {ID: "y"},
-	}
-	usersDb = map[string]OktaUser{
-		"larry":  {Roles: []Role{{Name: "viewer", FeatureFlagID: "x"}}},
-		"anne":   {Roles: []Role{{Name: "viewer", FeatureFlagID: "y"}}},
-		"graham": {Roles: []Role{{Name: "viewer", FeatureFlagID: "z"}}},
-	}
-	groupsDb = map[string]OktaGroup{
-		"Internal Tools":             {Roles: []Role{{Name: "administrator", FeatureFlagID: "x"}}},
-		"Infrastructure Engineering": {Roles: []Role{{Name: "viewer", FeatureFlagID: "x"}}},
-		"Engineering":                {Roles: []Role{{Name: "viewer", FeatureFlagID: "z"}}},
-	}
+	"github.com/adrianosela/goso/authz"
 )
 
 // This function is mocking an Okta Developer API call to
 // https://developer.okta.com/docs/reference/api/users/#get-user-s-groups
 func getOktaGroupsForUser(username string) []string {
 	mockGroups := map[string][]string{
-		"larry":  {"Infrastructure Engineering", "Engineering"},
-		"graham": {"Internal Tools", "Engineering"},
+		"larry":  {"Infrastructure Engineering", "Engineering", "Everyone"},
+		"anne":   {"Internal Tools", "Engineering", "Everyone"},
+		"graham": {"Everyone"},
 	}
 
 	groups, ok := mockGroups[username]
@@ -62,33 +29,45 @@ func getOktaGroupsForUser(username string) []string {
 	return []string{}
 }
 
-func initializeRBAC(files ...string) (*oso.Oso, error) {
+func initAuthorization() (*oso.Oso, error) {
+	// initialize resources' role-identity mappings
+	if err := authz.Load("authz.yaml"); err != nil {
+		return nil, fmt.Errorf("Failed to initialize resources' role-identity mappings: %s", err)
+	}
+
+	// initialize oso definitions
 	rbac, err := oso.NewOso()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to initialize RBAC provider: %s", err)
+		return nil, fmt.Errorf("Failed to initialize OSO RBAC provider: %s", err)
 	}
-
-	for _, t := range []reflect.Type{reflect.TypeOf(FeatureFlag{}), reflect.TypeOf(OktaUser{})} {
+	for _, t := range []reflect.Type{reflect.TypeOf(authz.ProtectedResource{}), reflect.TypeOf(authz.User{})} {
 		rbac.RegisterClass(t, nil)
 	}
-
-	if err := rbac.LoadFiles(files); err != nil {
-		return nil, fmt.Errorf("Failed to load RBAC provider definition files: %s", err)
+	if err := rbac.LoadFiles([]string{"perms.polar"}); err != nil {
+		return nil, fmt.Errorf("Failed to load OSO RBAC provider definition files: %s", err)
 	}
-
 	return &rbac, nil
 }
 
 func main() {
-	rbac, err := initializeRBAC("perms.polar")
+	rbac, err := initAuthorization()
 	if err != nil {
-		log.Fatalf("Failed to initialize RBAC: %s", err)
+		log.Fatalf("Failed to initialize authorization mechanism: %s", err)
 	}
 
 	r := mux.NewRouter()
 
+	// server liveliness check endpoint
+	r.Methods(http.MethodGet).Path("/status").HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("I'm alive!"))
+			return
+		},
+	)
+
 	// RBAC testing endpoint
-	r.Methods(http.MethodGet, http.MethodPost).Path("/feature-flag/{id}").HandlerFunc(
+	r.Methods(http.MethodGet, http.MethodPost).Path("/resource/{name}").HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 
 			action := "view"
@@ -96,7 +75,8 @@ func main() {
 				action = "toggle"
 			}
 
-			authenticatedUser := r.Header.Get("MOCK_AUTENTICATED_USERNAME")
+			// user to mock passed in HTTP header
+			authenticatedUser := r.Header.Get("AUTENTICATED_USER")
 			if authenticatedUser == "" {
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("No bearer token provided"))
@@ -104,51 +84,34 @@ func main() {
 
 			}
 
-			id := mux.Vars(r)["id"]
-			if id == "" {
+			name := mux.Vars(r)["name"]
+			if name == "" {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("No feature flag id provided"))
+				w.Write([]byte("No resource name provided"))
 				return
 			}
 
-			user, ok := usersDb[authenticatedUser]
-			if !ok { // user not in DB
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+			user, ok := authz.Users[authenticatedUser]
+			if !ok {
+				user = authz.User{Roles: []authz.Role{}}
 			}
 
 			// decorate user object with groups
 			for _, groupName := range getOktaGroupsForUser(authenticatedUser) {
-				group, ok := groupsDb[groupName]
+				group, ok := authz.Groups[groupName]
 				if ok {
 					user.Groups = append(user.Groups, group)
 				}
 			}
 
-			ff, ok := ffDb[id]
-			if !ok {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(fmt.Sprintf("Feature flag \"%s\" was not found", id)))
-				return
-			}
-
-			if err := rbac.Authorize(user, action, ff); err != nil {
+			if err := rbac.Authorize(user, action, authz.ProtectedResource{Name: name}); err != nil {
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(fmt.Sprintf("User not authorized to %s feature flag \"%s\"", action, id)))
+				w.Write([]byte(fmt.Sprintf("User not authorized for action \"%s\" on resource \"%s\"", action, name)))
 				return
 			}
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf("Welcome to feature flag \"%s\"", id)))
-			return
-		},
-	)
-
-	// server liveliness check endpoint
-	r.Methods(http.MethodGet).Path("/status").HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("I'm alive!"))
+			w.Write([]byte(fmt.Sprintf("Performed action \"%s\" on resource \"%s\"", action, name)))
 			return
 		},
 	)
