@@ -22,13 +22,16 @@ type User struct {
 	Groups []*Group
 }
 
-// Rule represents the access control rule for a resource
-type Rule struct {
-	Role   string
+// IdentitySet represents a set of identities
+type IdentitySet struct {
 	Users  []string
 	Groups []string
 }
 
-// AccessControlRules is a mapping of resource name to the
-// the set of rules that govern access control for it
-type AccessControlRules map[string][]Rule
+// RoleMap is a map of role name to the set
+// of identities which can assume the role
+type RoleMap map[string]IdentitySet
+
+// AccessControlRules is a mapping of resource name to
+// the role map which governs access control for it
+type AccessControlRules map[string]RoleMap

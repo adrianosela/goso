@@ -35,28 +35,22 @@ func Load(fname string) error {
 	}
 
 	for resource, rules := range data {
-		roleDefnsForResource := map[string]interface{}{} // used as a set for deduplication of roles per resource
-		for _, rule := range rules {
-			if _, ok := roleDefnsForResource[rule.Role]; ok {
-				return fmt.Errorf("Duplicate role definition for role \"%s\" of resource \"%s\"", rule.Role, resource)
-			} else {
-				roleDefnsForResource[rule.Role] = true
-			}
-			for _, user := range rule.Users {
+		for role, identities := range rules {
+			for _, user := range identities.Users {
 				if u, ok := Users[user]; ok {
-					u.Roles = append(u.Roles, Role{Name: rule.Role, Resource: resource})
+					u.Roles = append(u.Roles, Role{Name: role, Resource: resource})
 				} else {
 					Users[user] = &User{
-						Roles: []Role{{Name: rule.Role, Resource: resource}},
+						Roles: []Role{{Name: role, Resource: resource}},
 					}
 				}
 			}
-			for _, group := range rule.Groups {
+			for _, group := range identities.Groups {
 				if g, ok := Groups[group]; ok {
-					g.Roles = append(g.Roles, Role{Name: rule.Role, Resource: resource})
+					g.Roles = append(g.Roles, Role{Name: role, Resource: resource})
 				} else {
 					Groups[group] = &Group{
-						Roles: []Role{{Name: rule.Role, Resource: resource}},
+						Roles: []Role{{Name: role, Resource: resource}},
 					}
 				}
 			}

@@ -1,29 +1,29 @@
 # anyone can view and toggle
 feature-flag-a:
-  - role: administrator
+  administrator:
     groups:
       - Everyone
 
 # anyone can view, only folks in the Engineering
 # group and a few select others can toggle
 feature-flag-b:
-  - role: administrator
+  administrator:
     groups:
       - Engineering
     users:
       - larry
       - anne
       - graham
-  - role: viewer
+  viewer:
     groups:
       - Everyone
 
 # only folks in the Infrastructure Engineering
 # group can view and toggle
 feature-flag-c:
-  - role: administrator
+  administrator:
     groups:
       - Infrastructure Engineering
-  - role: viewer 
+  viewer:
     groups:
       - Engineering
